@@ -1,3 +1,4 @@
+import streamlit as st
 import random
 from collections import defaultdict
 
@@ -5,24 +6,36 @@ from collections import defaultdict
 # GLOBAL STORAGE
 # =========================
 
-BANNERS = {}
-ARCHIVED_BANNERS = set()
-ALIASES = {}
+if "BANNERS" not in st.session_state:
+    st.session_state.BANNERS = {}
+if "ARCHIVED_BANNERS" not in st.session_state:
+    st.session_state.ARCHIVED_BANNERS = set()
+if "ALIASES" not in st.session_state:
+    st.session_state.ALIASES = {}
 
-# pity counters
-GLOBAL_LEG_PITY = 0         # shared between Majestic and Mystical Stable
-WINGED_PEGASUS_PITY = 0     # Winged Stable
-TACK_EPIC_PITY = 0
-TACK_LEG_PITY = 0
-VALENTINE_LEG_PITY = 0
+# Pity counters
+if "GLOBAL_LEG_PITY" not in st.session_state:
+    st.session_state.GLOBAL_LEG_PITY = 0
+if "WINGED_PEGASUS_PITY" not in st.session_state:
+    st.session_state.WINGED_PEGASUS_PITY = 0
+if "TACK_EPIC_PITY" not in st.session_state:
+    st.session_state.TACK_EPIC_PITY = 0
+if "TACK_LEG_PITY" not in st.session_state:
+    st.session_state.TACK_LEG_PITY = 0
+if "VALENTINE_LEG_PITY" not in st.session_state:
+    st.session_state.VALENTINE_LEG_PITY = 0
 
-# pity persistence toggle
-PERSIST_PITY = True
+# Pity persistence
+if "PERSIST_PITY" not in st.session_state:
+    st.session_state.PERSIST_PITY = True
 
-# cumulative stats
-TOTAL_PULLS = 0
-CUMULATIVE_COUNTS = defaultdict(int)
-RARITY_COUNTS = defaultdict(int)
+# Stats
+if "TOTAL_PULLS" not in st.session_state:
+    st.session_state.TOTAL_PULLS = 0
+if "CUMULATIVE_COUNTS" not in st.session_state:
+    st.session_state.CUMULATIVE_COUNTS = defaultdict(int)
+if "RARITY_COUNTS" not in st.session_state:
+    st.session_state.RARITY_COUNTS = defaultdict(int)
 
 # =========================
 # UTILITY FUNCTIONS
@@ -32,55 +45,16 @@ def normalize(text):
     return text.lower().replace(" ", "").replace("_", "")
 
 def register_banner(name, items, aliases=None, archived=False):
-    BANNERS[name] = items
+    st.session_state.BANNERS[name] = items
     if archived:
-        ARCHIVED_BANNERS.add(name)
+        st.session_state.ARCHIVED_BANNERS.add(name)
     if aliases:
         for a in aliases:
-            ALIASES[normalize(a)] = name
-    ALIASES[normalize(name)] = name
-
-def list_banners():
-    print("\nAvailable banners:")
-    for b in BANNERS:
-        tag = " (ARCHIVED)" if b in ARCHIVED_BANNERS else ""
-        print(f"  - {b}{tag}")
+            st.session_state.ALIASES[normalize(a)] = name
+    st.session_state.ALIASES[normalize(name)] = name
 
 def resolve_banner(input_name):
-    key = normalize(input_name)
-    return ALIASES.get(key)
-
-# =========================
-# TABLE DISPLAY
-# =========================
-
-def print_table(rows, headers):
-    col_widths = [len(h) for h in headers]
-    for row in rows:
-        for i, cell in enumerate(row):
-            col_widths[i] = max(col_widths[i], len(str(cell)))
-
-    def line():
-        print("+" + "+".join("-" * (w + 2) for w in col_widths) + "+")
-
-    line()
-    print("| " + " | ".join(headers[i].ljust(col_widths[i]) for i in range(len(headers))) + " |")
-    line()
-
-    for row in rows:
-        print("| " + " | ".join(str(row[i]).ljust(col_widths[i]) for i in range(len(row))) + " |")
-    line()
-
-def print_table_chunked(rows, headers, chunk_size=50):
-    for start in range(0, len(rows), chunk_size):
-        chunk = rows[start:start + chunk_size]
-        print_table(chunk, headers)
-        if start + chunk_size < len(rows):
-            input("\n--- Press Enter to continue ---\n")
-
-# =========================
-# WEIGHTED CHOICE
-# =========================
+    return st.session_state.ALIASES.get(normalize(input_name))
 
 def weighted_choice(items):
     total = sum(w for _, _, w in items)
@@ -97,36 +71,34 @@ def weighted_choice(items):
 # =========================
 
 def pull_once(banner):
-    global GLOBAL_LEG_PITY, WINGED_PEGASUS_PITY, TACK_EPIC_PITY, TACK_LEG_PITY, VALENTINE_LEG_PITY
-
-    items = BANNERS[banner]
+    items = st.session_state.BANNERS[banner]
     pity_used = False
     pull_info = {}
 
     # ---------- TACK BANNER ----------
     if banner == "Tack Banner":
-        TACK_EPIC_PITY += 1
-        TACK_LEG_PITY += 1
+        st.session_state.TACK_EPIC_PITY += 1
+        st.session_state.TACK_LEG_PITY += 1
 
         legendary_items = [i for i in items if i[1] == "Legendary"]
         epic_items = [i for i in items if i[1] == "Epic"]
 
-        if TACK_LEG_PITY >= 90:
+        if st.session_state.TACK_LEG_PITY >= 90:
             name, rarity = weighted_choice(legendary_items)
-            TACK_LEG_PITY = 0
+            st.session_state.TACK_LEG_PITY = 0
             pity_used = True
             active_pool = legendary_items
-        elif TACK_EPIC_PITY >= 10:
+        elif st.session_state.TACK_EPIC_PITY >= 10:
             name, rarity = weighted_choice(epic_items)
-            TACK_EPIC_PITY = 0
+            st.session_state.TACK_EPIC_PITY = 0
             pity_used = True
             active_pool = epic_items
         else:
             name, rarity = weighted_choice(items)
             if rarity == "Legendary":
-                TACK_LEG_PITY = 0
+                st.session_state.TACK_LEG_PITY = 0
             if rarity == "Epic":
-                TACK_EPIC_PITY = 0
+                st.session_state.TACK_EPIC_PITY = 0
             active_pool = items
 
         total_weight = sum(w for _, _, w in active_pool)
@@ -134,31 +106,31 @@ def pull_once(banner):
             if n == name:
                 pull_info[f"{n} Chance"] = round(w / total_weight * 100, 2)
 
-        pull_info["Tack Epic Pity"] = TACK_EPIC_PITY
-        pull_info["Tack Legendary Pity"] = TACK_LEG_PITY
+        pull_info["Tack Epic Pity"] = st.session_state.TACK_EPIC_PITY
+        pull_info["Tack Legendary Pity"] = st.session_state.TACK_LEG_PITY
         return name, rarity, pity_used, pull_info
 
     # ---------- VALENTINE BANNER ----------
     if banner == "Valentine Stable":
         FEATURED_NAME = "Lovestruck Unicorn"
 
-        # increment pity only if featured not obtained
-        if all(n[0] != FEATURED_NAME for n in items):
-            print("ERROR: Featured Valentine item not found!")
-            return weighted_choice(items)[0], weighted_choice(items)[1], False, {}
+        st.session_state.VALENTINE_LEG_PITY += 1
 
-        VALENTINE_LEG_PITY += 1
-        featured_item = next(i for i in items if i[0] == FEATURED_NAME)
+        featured_item = next((i for i in items if i[0] == FEATURED_NAME), None)
 
-        if VALENTINE_LEG_PITY >= 25:
+        if not featured_item:
+            name, rarity = weighted_choice(items)
+            return name, rarity, False, {}
+
+        if st.session_state.VALENTINE_LEG_PITY >= 25:
             name, rarity, _ = featured_item
-            VALENTINE_LEG_PITY = 0
+            st.session_state.VALENTINE_LEG_PITY = 0
             pity_used = True
             active_pool = [featured_item]
         else:
             name, rarity = weighted_choice(items)
             if name == FEATURED_NAME:
-                VALENTINE_LEG_PITY = 0
+                st.session_state.VALENTINE_LEG_PITY = 0
             active_pool = [i for i in items if i[1] == rarity]
 
         total_banner_weight = sum(w for _, _, w in items)
@@ -169,23 +141,23 @@ def pull_once(banner):
             if n == name:
                 pull_info[f"{n} Chance"] = round(w / category_weight * category_prob * 100, 2)
 
-        pull_info["Valentine Pity Counter"] = VALENTINE_LEG_PITY
+        pull_info["Valentine Pity Counter"] = st.session_state.VALENTINE_LEG_PITY
         return name, rarity, pity_used, pull_info
 
     # ---------- WINGED STABLE ----------
     if banner == "Winged Stable":
-        WINGED_PEGASUS_PITY += 1
+        st.session_state.WINGED_PEGASUS_PITY += 1
         legendary_items = [i for i in items if i[0] == "Pegasus"]
 
-        if WINGED_PEGASUS_PITY >= 10:
+        if st.session_state.WINGED_PEGASUS_PITY >= 10:
             name, rarity = weighted_choice(legendary_items)
-            WINGED_PEGASUS_PITY = 0
+            st.session_state.WINGED_PEGASUS_PITY = 0
             pity_used = True
             active_pool = legendary_items
         else:
             name, rarity = weighted_choice(items)
             if name == "Pegasus":
-                WINGED_PEGASUS_PITY = 0
+                st.session_state.WINGED_PEGASUS_PITY = 0
             active_pool = [i for i in items if i[1] == rarity]
 
         total_weight = sum(w for _, _, w in active_pool)
@@ -193,23 +165,23 @@ def pull_once(banner):
             if n == name:
                 pull_info[f"{n} Chance"] = round(w / total_weight * 100, 2)
 
-        pull_info["Winged Pity Counter"] = WINGED_PEGASUS_PITY
+        pull_info["Winged Pity Counter"] = st.session_state.WINGED_PEGASUS_PITY
         return name, rarity, pity_used, pull_info
 
-    # ---------- MAJESTIC & MYSTICAL STABLES ----------
+    # ---------- MAJESTIC & MYSTICAL ----------
     if banner in ("Majestic Stable", "Mystical Stable"):
-        GLOBAL_LEG_PITY += 1
+        st.session_state.GLOBAL_LEG_PITY += 1
         legendary_items = [i for i in items if "Legendary" in i[1] or "Fantasy" in i[1]]
 
-        if GLOBAL_LEG_PITY >= 10:
+        if st.session_state.GLOBAL_LEG_PITY >= 10:
             name, rarity = weighted_choice(legendary_items)
-            GLOBAL_LEG_PITY = 0
+            st.session_state.GLOBAL_LEG_PITY = 0
             pity_used = True
             active_pool = legendary_items
         else:
             name, rarity = weighted_choice(items)
             if "Legendary" in rarity or "Fantasy" in rarity:
-                GLOBAL_LEG_PITY = 0
+                st.session_state.GLOBAL_LEG_PITY = 0
             active_pool = [i for i in items if i[1] == rarity]
 
         total_weight = sum(w for _, _, w in active_pool)
@@ -217,10 +189,10 @@ def pull_once(banner):
             if n == name:
                 pull_info[f"{n} Chance"] = round(w / total_weight * 100, 2)
 
-        pull_info["Horse Pity Counter"] = GLOBAL_LEG_PITY
+        pull_info["Horse Pity Counter"] = st.session_state.GLOBAL_LEG_PITY
         return name, rarity, pity_used, pull_info
 
-    # ---------- OTHER BANNERS (COTN etc.) ----------
+    # ---------- OTHER BANNERS ----------
     name, rarity = weighted_choice(items)
     total_weight = sum(w for _, _, w in items)
     for n, r, w in items:
@@ -233,26 +205,22 @@ def pull_once(banner):
 # =========================
 
 def multi_pull(banner, amount, highlights=None, advanced=False):
-    global TOTAL_PULLS
-    global GLOBAL_LEG_PITY, WINGED_PEGASUS_PITY, TACK_EPIC_PITY, TACK_LEG_PITY, VALENTINE_LEG_PITY
-
-    # reset pity if persistence is OFF
-    if not PERSIST_PITY:
-        GLOBAL_LEG_PITY = 0
-        WINGED_PEGASUS_PITY = 0
-        TACK_EPIC_PITY = 0
-        TACK_LEG_PITY = 0
-        VALENTINE_LEG_PITY = 0
-
     highlights = highlights or []
-    rows = []
+    results = []
+
+    # Reset pity if OFF
+    if not st.session_state.PERSIST_PITY:
+        st.session_state.GLOBAL_LEG_PITY = 0
+        st.session_state.WINGED_PEGASUS_PITY = 0
+        st.session_state.TACK_EPIC_PITY = 0
+        st.session_state.TACK_LEG_PITY = 0
+        st.session_state.VALENTINE_LEG_PITY = 0
 
     for i in range(1, amount + 1):
         name, rarity, pity_used, pull_info = pull_once(banner)
-
-        TOTAL_PULLS += 1
-        CUMULATIVE_COUNTS[name] += 1
-        RARITY_COUNTS[rarity] += 1
+        st.session_state.TOTAL_PULLS += 1
+        st.session_state.CUMULATIVE_COUNTS[name] += 1
+        st.session_state.RARITY_COUNTS[rarity] += 1
 
         highlight_flag = any(h.lower() in name.lower() for h in highlights)
         highlight_mark = "PITY" if pity_used else ""
@@ -260,40 +228,35 @@ def multi_pull(banner, amount, highlights=None, advanced=False):
             highlight_mark += "*" if highlight_mark else "*"
 
         chance = pull_info.get(f"{name} Chance", "N/A")
-        cumulative_count = CUMULATIVE_COUNTS[name]
+        cumulative_count = st.session_state.CUMULATIVE_COUNTS[name]
 
         if advanced:
-            rows.append([i, name, rarity, chance, cumulative_count, highlight_mark])
+            results.append([i, name, rarity, chance, cumulative_count, highlight_mark])
         else:
-            rows.append([i, name, rarity, highlight_mark])
+            results.append([i, name, rarity, highlight_mark])
 
-    if advanced:
-        print_table_chunked(rows, ["#", "Item", "Rarity", "Chance (%)", "Cumulative", "Highlight"], 40)
-    else:
-        print_table_chunked(rows, ["#", "Item", "Rarity", "Highlight"], 40)
+    return results
 
 # =========================
-# STATS
+# DISPLAY FUNCTIONS
 # =========================
+
+def show_table(results):
+    st.table(results)
 
 def show_summary():
-    rows = [[r, c] for r, c in sorted(RARITY_COUNTS.items())]
-    print("\nPull Summary:")
-    print_table(rows, ["Rarity", "Count"])
+    rows = [[r, c] for r, c in sorted(st.session_state.RARITY_COUNTS.items())]
+    st.write("### Pull Summary")
+    st.table(rows)
 
 def show_cumulative():
-    rows = [[item, count] for item, count in sorted(CUMULATIVE_COUNTS.items(), key=lambda x: -x[1])]
-    print("\nCumulative Items:")
-    print_table(rows, ["Item", "Times Pulled"])
-
-# =========================
-# BEST BANNER
-# =========================
+    rows = [[item, count] for item, count in sorted(st.session_state.CUMULATIVE_COUNTS.items(), key=lambda x: -x[1])]
+    st.write("### Cumulative Items")
+    st.table(rows)
 
 def best_banner():
     scores = {}
-
-    for banner, items in BANNERS.items():
+    for banner, items in st.session_state.BANNERS.items():
         score = 0
         for _, rarity, weight in items:
             if "Legendary" in rarity:
@@ -303,141 +266,9 @@ def best_banner():
             else:
                 score += weight
         scores[banner] = round(score, 3)
-
     rows = [[b, s] for b, s in sorted(scores.items(), key=lambda x: -x[1])]
-    print("\nBanner Strength (rough):")
-    print_table(rows, ["Banner", "Score"])
-
-# =========================
-# INTERACTIVE
-# =========================
-
-def interactive():
-    print("\n--- Horse Stable Simulator ---\n")
-    print("Welcome to the simulator! Here's how it works:")
-    print(" - Pull from various banners to get items of different rarities.")
-    print(" - 'Pity' counters ensure you eventually get higher-rarity items:")
-    print("     * Tack Banner: Epic pity at 10, Legendary pity at 90")
-    print("     * Valentine Banner: Featured item pity at 25")
-    print("     * Winged Stable: Pegasus pity at 10")
-    print("     * Majestic/Mystical Stable: Legendary/Fantasy pity at 10 (shared)")
-    print(" - Creatures of the Night (COTN) has no pity at all")
-    print(" - You can toggle 'advanced' mode to see detailed stats for each pull.")
-    print(" - 'pity on/off' will toggle whether pity counters persist between sessions.\n")
-    print("Commands available: summary | cumulative | best | advanced on/off | pity on/off | exit\n")
-
-    advanced_mode = False
-
-    while True:
-        list_banners()
-        choice = input("\nChoose banner or command: ").strip()
-
-        if choice.lower() == "exit":
-            break
-        elif choice.lower() == "summary":
-            show_summary()
-        elif choice.lower() == "cumulative":
-            show_cumulative()
-        elif choice.lower() == "best":
-            best_banner()
-        elif choice.lower() == "advanced on":
-            advanced_mode = True
-            print("Advanced mode ENABLED.")
-        elif choice.lower() == "advanced off":
-            advanced_mode = False
-            print("Advanced mode DISABLED.")
-        elif choice.lower() == "pity on":
-            global PERSIST_PITY
-            PERSIST_PITY = True
-            print("Pity persistence ENABLED.")
-        elif choice.lower() == "pity off":
-            PERSIST_PITY = False
-            print("Pity persistence DISABLED.")
-        else:
-            banner = resolve_banner(choice)
-            if not banner:
-                print("Invalid banner name.")
-                continue
-
-            try:
-                pulls = int(input(f"How many pulls on {banner}? "))
-            except ValueError:
-                print("Enter a number.")
-                continue
-
-            highlight_input = input("Highlight keywords (comma separated, optional): ")
-            highlights = [h.strip() for h in highlight_input.split(",")] if highlight_input else []
-
-            multi_pull(banner, pulls, highlights, advanced=advanced_mode)
-
-# =========================
-# INTERACTIVE
-# =========================
-
-def interactive():
-    print("\n--- Horse Stable Simulator ---\n")
-    print("Welcome to the simulator! Here's how it works:")
-    print(" - Pull from various banners to get items of different rarities.")
-    print(" - 'Pity' counters ensure you eventually get higher-rarity items:")
-    print("     * Tack Banner: Epic and Legendary pity")
-    print("     * Valentine Banner: Featured item pity at 25 pulls")
-    print("     * Global Horse Banners: Legendary pity at 10 pulls")
-    print(" - You can toggle 'advanced' mode to see detailed stats for each pull.")
-    print(" - 'pity on/off' will toggle whether pity counters persist between sessions.\n")
-    print("Commands available: summary | cumulative | best | advanced on/off | pity on/off | exit\n")
-
-    advanced_mode = False
-
-    while True:
-        list_banners()
-        choice = input("\nChoose banner or command: ").strip()
-
-        if choice.lower() == "exit":
-            break
-
-        elif choice.lower() == "summary":
-            show_summary()
-
-        elif choice.lower() == "cumulative":
-            show_cumulative()
-
-        elif choice.lower() == "best":
-            best_banner()
-
-        elif choice.lower() == "advanced on":
-            advanced_mode = True
-            print("Advanced mode ENABLED.")
-
-        elif choice.lower() == "advanced off":
-            advanced_mode = False
-            print("Advanced mode DISABLED.")
-
-        elif choice.lower() == "pity on":
-            global PERSIST_PITY
-            PERSIST_PITY = True
-            print("Pity persistence ENABLED.")
-
-        elif choice.lower() == "pity off":
-            PERSIST_PITY = False
-            print("Pity persistence DISABLED.")
-
-        else:
-            banner = resolve_banner(choice)
-            if not banner:
-                print("Invalid banner name.")
-                continue
-
-            try:
-                pulls = int(input(f"How many pulls on {banner}? "))
-            except ValueError:
-                print("Enter a number.")
-                continue
-
-            highlight_input = input("Highlight keywords (comma separated, optional): ")
-            highlights = [h.strip() for h in highlight_input.split(",")] if highlight_input else []
-
-            multi_pull(banner, pulls, highlights, advanced=advanced_mode)
-
+    st.write("### Banner Strength (rough)")
+    st.table(rows)
 
 # =========================
 # PART 2 — Creatures of the Night (ARCHIVED)
@@ -1095,6 +926,143 @@ register_banner(
     aliases=["tack", "gear", "equipment"]
 )
 
+# =========================
+# STREAMLIT UI (LEAN & FULL)
+# =========================
 
-if __name__ == "__main__":
-    interactive()
+import streamlit as st
+import io
+import csv
+
+st.set_page_config(layout="wide")
+st.title("Horse Stable Simulator 🐴")
+
+# ---------- SESSION SAFETY ----------
+if "LAST_RESULTS" not in st.session_state:
+    st.session_state.LAST_RESULTS = None
+
+# ---------- RARITY COLORS ----------
+RARITY_COLORS = {
+    "Rare": "#4da6ff",
+    "Epic": "#9b59b6",
+    "Legendary": "#c9a227",
+    "Fantasy": "#ffd966",
+    "Featured Fantasy": "#ff6fb1"
+}
+
+# ---------- SIDEBAR ----------
+st.sidebar.header("Settings")
+st.session_state.PERSIST_PITY = st.sidebar.checkbox(
+    "Persistent Pity",
+    value=st.session_state.PERSIST_PITY
+)
+
+advanced_mode = st.sidebar.checkbox("Advanced Mode")
+
+if st.sidebar.button("RESET ALL"):
+    st.session_state.TOTAL_PULLS = 0
+    st.session_state.CUMULATIVE_COUNTS.clear()
+    st.session_state.RARITY_COUNTS.clear()
+    st.session_state.GLOBAL_LEG_PITY = 0
+    st.session_state.WINGED_PEGASUS_PITY = 0
+    st.session_state.TACK_EPIC_PITY = 0
+    st.session_state.TACK_LEG_PITY = 0
+    st.session_state.VALENTINE_LEG_PITY = 0
+    st.session_state.LAST_RESULTS = None
+    st.rerun()
+
+# ---------- MAIN CONTROLS ----------
+col1, col2, col3 = st.columns([2,1,1])
+with col1:
+    banner_choice = st.selectbox(
+        "Choose a banner",
+        list(st.session_state.BANNERS.keys())
+    )
+with col2:
+    pulls = st.number_input("Pulls", min_value=1, value=1)
+with col3:
+    highlight_input = st.text_input("Highlight keywords")
+
+highlights = [h.strip().lower() for h in highlight_input.split(",")] if highlight_input else []
+
+# ---------- PULL BUTTON ----------
+if st.button("🎲 PULL", use_container_width=True):
+    results = multi_pull(banner_choice, pulls, highlights, advanced=advanced_mode)
+    st.session_state.LAST_RESULTS = results  # Save last pull automatically
+
+    st.write("### Results")
+    table_data = []
+    for row in results:
+        if advanced_mode:
+            i, name, rarity, chance, cumulative, mark = row
+            table_data.append([i, name, rarity, chance, cumulative, mark])
+        else:
+            i, name, rarity, mark = row
+            table_data.append([i, name, rarity, mark])
+
+    # Build HTML table
+    html_table = "<table style='width:100%; border-collapse: collapse;'>"
+    if advanced_mode:
+        html_table += "<tr><th>#</th><th>Item</th><th>Rarity</th><th>Chance</th><th>Owned</th></tr>"
+    else:
+        html_table += "<tr><th>#</th><th>Item</th><th>Rarity</th></tr>"
+
+    for row in table_data:
+        html_table += "<tr>"
+        for idx, cell in enumerate(row):
+            display = str(cell)
+            # Highlight keywords
+            if highlights and idx == 1:
+                for kw in highlights:
+                    if kw in display.lower():
+                        display = display.replace(kw, f"<mark>{kw}</mark>")
+            # Color rarity
+            if (advanced_mode and idx == 2) or (not advanced_mode and idx == 2):
+                color = RARITY_COLORS.get(display, "#ffffff")
+                html_table += f"<td style='padding:4px; text-align:center; color:{color}; font-weight:600'>{display}</td>"
+            else:
+                html_table += f"<td style='padding:4px; text-align:center'>{display}</td>"
+        html_table += "</tr>"
+    html_table += "</table>"
+
+    st.markdown(html_table, unsafe_allow_html=True)
+
+# ---------- DISPLAY LAST RESULTS ----------
+if st.session_state.LAST_RESULTS:
+    results = st.session_state.LAST_RESULTS
+    st.write("### Last Pulls")
+    # CSV download
+    csv_buffer = io.StringIO()
+    csv_writer = csv.writer(csv_buffer)
+    csv_writer.writerow([f"Column {i+1}" for i in range(len(results[0]))])
+    csv_writer.writerows(results)
+    st.download_button("📥 Download Last Pull CSV", data=csv_buffer.getvalue(), file_name="last_pull.csv")
+
+# ---------- RARITY STATS (TEXT-BASED) ----------
+
+if st.session_state.RARITY_COUNTS:
+
+    st.write("## 📊 Pull Statistics")
+
+    total = sum(st.session_state.RARITY_COUNTS.values())
+
+    for rarity, count in st.session_state.RARITY_COUNTS.items():
+        pct = (count / total) * 100
+        color = RARITY_COLORS.get(rarity, "#ffffff")
+        st.markdown(
+            f"<span style='color:{color}; font-weight:600'>{rarity}</span>: {count} pulls ({pct:.1f}%)",
+            unsafe_allow_html=True
+        )
+
+# ---------- EXTRA TABLE BUTTONS ----------
+st.divider()
+colA, colB, colC = st.columns(3)
+with colA:
+    if st.button("📜 Summary", use_container_width=True):
+        show_summary()
+with colB:
+    if st.button("📦 Cumulative", use_container_width=True):
+        show_cumulative()
+with colC:
+    if st.button("⭐ Best Banner", use_container_width=True):
+        best_banner()
