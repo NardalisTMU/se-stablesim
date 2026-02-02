@@ -219,7 +219,14 @@ def multi_pull(banner, amount, highlights=None, advanced=False):
     for i in range(1, amount + 1):
         name, rarity, pity_used, pull_info = pull_once(banner)
         st.session_state.TOTAL_PULLS += 1
+
+        # --- SAFELY increment counts ---
+        if name not in st.session_state.CUMULATIVE_COUNTS:
+            st.session_state.CUMULATIVE_COUNTS[name] = 0
         st.session_state.CUMULATIVE_COUNTS[name] += 1
+
+        if rarity not in st.session_state.RARITY_COUNTS:
+            st.session_state.RARITY_COUNTS[rarity] = 0
         st.session_state.RARITY_COUNTS[rarity] += 1
 
         highlight_flag = any(h.lower() in name.lower() for h in highlights)
@@ -927,7 +934,7 @@ register_banner(
 )
 
 # =========================
-# STREAMLIT UI (LEAN & FULL)
+# STREAMLIT UI (FULL FIXED)
 # =========================
 
 import streamlit as st
@@ -940,6 +947,18 @@ st.title("Horse Stable Simulator 🐴")
 # ---------- SESSION SAFETY ----------
 if "LAST_RESULTS" not in st.session_state:
     st.session_state.LAST_RESULTS = None
+if "PERSIST_PITY" not in st.session_state:
+    st.session_state.PERSIST_PITY = True
+if "BANNERS" not in st.session_state:
+    st.session_state.BANNERS = {}
+if "TOTAL_PULLS" not in st.session_state:
+    st.session_state.TOTAL_PULLS = 0
+if "CUMULATIVE_COUNTS" not in st.session_state:
+    from collections import defaultdict
+    st.session_state.CUMULATIVE_COUNTS = defaultdict(int)
+if "RARITY_COUNTS" not in st.session_state:
+    from collections import defaultdict
+    st.session_state.RARITY_COUNTS = defaultdict(int)
 
 # ---------- RARITY COLORS ----------
 RARITY_COLORS = {
@@ -953,21 +972,14 @@ RARITY_COLORS = {
 # ---------- SIDEBAR ----------
 st.sidebar.header("Settings")
 st.session_state.PERSIST_PITY = st.sidebar.checkbox(
-    "Persistent Pity",
-    value=st.session_state.PERSIST_PITY
+    "Persistent Pity", value=st.session_state.PERSIST_PITY
 )
-
 advanced_mode = st.sidebar.checkbox("Advanced Mode")
 
 if st.sidebar.button("RESET ALL"):
     st.session_state.TOTAL_PULLS = 0
     st.session_state.CUMULATIVE_COUNTS.clear()
     st.session_state.RARITY_COUNTS.clear()
-    st.session_state.GLOBAL_LEG_PITY = 0
-    st.session_state.WINGED_PEGASUS_PITY = 0
-    st.session_state.TACK_EPIC_PITY = 0
-    st.session_state.TACK_LEG_PITY = 0
-    st.session_state.VALENTINE_LEG_PITY = 0
     st.session_state.LAST_RESULTS = None
     st.rerun()
 
@@ -1003,25 +1015,25 @@ if st.button("🎲 PULL", use_container_width=True):
     # Build HTML table
     html_table = "<table style='width:100%; border-collapse: collapse;'>"
     if advanced_mode:
-        html_table += "<tr><th>#</th><th>Item</th><th>Rarity</th><th>Chance</th><th>Owned</th></tr>"
+        html_table += "<tr style='background-color:#555; color:white;'><th>#</th><th>Item</th><th>Rarity</th><th>Chance</th><th>Owned</th></tr>"
     else:
-        html_table += "<tr><th>#</th><th>Item</th><th>Rarity</th></tr>"
+        html_table += "<tr style='background-color:#555; color:white;'><th>#</th><th>Item</th><th>Rarity</th></tr>"
 
     for row in table_data:
-        html_table += "<tr>"
+        html_table += "<tr style='color:white'>"  # <-- default text color
         for idx, cell in enumerate(row):
             display = str(cell)
             # Highlight keywords
             if highlights and idx == 1:
                 for kw in highlights:
-                    if kw in display.lower():
+                    if kw.lower() in display.lower():
                         display = display.replace(kw, f"<mark>{kw}</mark>")
             # Color rarity
             if (advanced_mode and idx == 2) or (not advanced_mode and idx == 2):
                 color = RARITY_COLORS.get(display, "#ffffff")
                 html_table += f"<td style='padding:4px; text-align:center; color:{color}; font-weight:600'>{display}</td>"
             else:
-                html_table += f"<td style='padding:4px; text-align:center'>{display}</td>"
+                html_table += f"<td style='padding:4px; text-align:center; color:white'>{display}</td>"
         html_table += "</tr>"
     html_table += "</table>"
 
@@ -1031,28 +1043,75 @@ if st.button("🎲 PULL", use_container_width=True):
 if st.session_state.LAST_RESULTS:
     results = st.session_state.LAST_RESULTS
     st.write("### Last Pulls")
-    # CSV download
     csv_buffer = io.StringIO()
     csv_writer = csv.writer(csv_buffer)
     csv_writer.writerow([f"Column {i+1}" for i in range(len(results[0]))])
     csv_writer.writerows(results)
     st.download_button("📥 Download Last Pull CSV", data=csv_buffer.getvalue(), file_name="last_pull.csv")
 
-# ---------- RARITY STATS (TEXT-BASED) ----------
-
+# ---------- RARITY STATS ----------
 if st.session_state.RARITY_COUNTS:
-
     st.write("## 📊 Pull Statistics")
-
     total = sum(st.session_state.RARITY_COUNTS.values())
-
     for rarity, count in st.session_state.RARITY_COUNTS.items():
         pct = (count / total) * 100
-        color = RARITY_COLORS.get(rarity, "#ffffff")
-        st.markdown(
-            f"<span style='color:{color}; font-weight:600'>{rarity}</span>: {count} pulls ({pct:.1f}%)",
-            unsafe_allow_html=True
-        )
+        color = RARITY_COLORS.get(rarity, "#000000")
+        st.markdown(f"<span style='color:{color}; font-weight:600'>{rarity}</span>: {count} pulls ({pct:.1f}%)", unsafe_allow_html=True)
+
+# ---------- DISPLAY FUNCTIONS ----------
+def render_html_table(data, headers=None, highlights=None):
+    highlights = highlights or []
+    html = "<table style='width:100%; border-collapse: collapse;'>"
+    if headers:
+        html += "<tr style='background-color:#444; color:white;'>"
+        for h in headers:
+            html += f"<th style='padding:6px; text-align:center'>{h}</th>"
+        html += "</tr>"
+    for row in data:
+        html += "<tr>"
+        for idx, cell in enumerate(row):
+            display = str(cell)
+            if highlights and idx == 1:
+                for kw in highlights:
+                    if kw.lower() in display.lower():
+                        display = display.replace(kw, f"<mark>{kw}</mark>")
+            html += f"<td style='padding:4px; text-align:center'>{display}</td>"
+        html += "</tr>"
+    html += "</table>"
+    st.markdown(html, unsafe_allow_html=True)
+
+def show_summary():
+    data = [[r, c] for r, c in sorted(st.session_state.RARITY_COUNTS.items())]
+    headers = ["Rarity", "Count"]
+    st.write("### Pull Summary")
+    render_html_table(data, headers=headers)
+    return data, headers
+
+def show_cumulative():
+    data = [[item, count] for item, count in sorted(st.session_state.CUMULATIVE_COUNTS.items(), key=lambda x: -x[1])]
+    headers = ["Item", "Count"]
+    st.write("### Cumulative Items")
+    render_html_table(data, headers=headers)
+    return data, headers
+
+def best_banner():
+    scores = {}
+    for banner, items in st.session_state.BANNERS.items():
+        score = 0
+        for _, rarity, weight in items:
+            if "Legendary" in rarity:
+                score += weight * 5
+            elif "Epic" in rarity:
+                score += weight * 3
+            elif rarity in ("Fantasy", "Flying"):
+                score += weight * 2
+            else:
+                score += weight
+        scores[banner] = round(score, 2)
+    rows = [[b, s] for b, s in sorted(scores.items(), key=lambda x: -x[1])]
+    st.write("### ⭐ Best Banner (rough score)")
+    render_html_table(rows, headers=["Banner", "Score"])
+    st.markdown("<i>Point system: Legendary=5, Epic=3, Fantasy/Flying=2, Normal=1 (weighted)</i>", unsafe_allow_html=True)
 
 # ---------- EXTRA TABLE BUTTONS ----------
 st.divider()
@@ -1066,3 +1125,13 @@ with colB:
 with colC:
     if st.button("⭐ Best Banner", use_container_width=True):
         best_banner()
+
+# ---------- FOOTER ----------
+st.markdown(
+    """
+    <div style="width:100%; padding:10px; border-top:1px solid #999; margin-top:20px; text-align:center; color:#666">
+    Based on the Star Equestrian game | Credits: Nardalis | Echo Clover 9503 | Support: <a href='https://ko-fi.com/nardalisvault' target='_blank'>Ko-Fi</a>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
